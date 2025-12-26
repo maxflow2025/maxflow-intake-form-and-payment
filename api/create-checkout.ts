@@ -1,3 +1,5 @@
+// FIXED STRIPE ORIGIN HANDLING
+
 import Stripe from "stripe";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
