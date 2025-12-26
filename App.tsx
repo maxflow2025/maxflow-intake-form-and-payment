@@ -19,9 +19,6 @@ const ADMIN_EMAIL = 'longdang@maxflowtc.com';
 const SUPPORT_PHONE = '1-888-912-8999';
 const DISPLAY_TOTAL_STEPS = 9; // UPDATED FOR STEP 9
 
-// STRIPE REDIRECT CONFIG
-const STRIPE_SUCCESS_URL = window.location.origin + '/step-9-thank-you';
-
 // =====================
 // PRICING RATES
 // =====================
@@ -42,11 +39,15 @@ const App: React.FC = () => {
   const [locating, setLocating] = useState(false);
   const [isReturningClient, setIsReturningClient] = useState<boolean | null>(null);
   const [showCatalog, setShowCatalog] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // TEMPORARY PREVIEW OVERRIDE - BYPASS TO VIEW STEP 9
+  // Handle Stripe Redirection / Success State
   useEffect(() => {
-    if (window.location.pathname.endsWith('/step-9-thank-you')) {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('session_id')) {
       setStep(Step.ThankYou);
+      // Clean up the URL query parameters
+      window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, []);
 
@@ -218,6 +219,54 @@ const App: React.FC = () => {
       depositAmount
     };
   }, [formData.catalogQuantities, formData.needsFlaggers, formData.numFlaggers, formData.flaggerHours, formData.needsUTC, formData.numUTC, formData.utcHours]);
+
+  const handleCheckout = async () => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    
+    try {
+      // 1. Lock final total and convert to cents
+      const finalDepositAmount = financialSummary.depositAmount;
+      const amountInCents = Math.round(finalDepositAmount * 100);
+
+      // 2. Create Stripe Checkout Session
+      // We call the backend endpoint to create a secure Checkout Session
+      const response = await fetch('/api/create-checkout-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: amountInCents,
+          currency: 'usd',
+          email: formData.email,
+          success_url: window.location.origin + window.location.pathname + '?session_id={CHECKOUT_SESSION_ID}',
+          cancel_url: window.location.href,
+          metadata: {
+            companyName: formData.companyName,
+            contactName: formData.contactName,
+            startDate: formData.startDate,
+            is24hRequest: isWithin24Hours ? 'true' : 'false'
+          }
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to initiate secure checkout session.');
+      }
+
+      const session = await response.json();
+
+      // 3. Redirect to Stripe-hosted checkout
+      if (session.url) {
+        window.location.href = session.url;
+      } else {
+        throw new Error('Invalid checkout session received.');
+      }
+    } catch (error) {
+      console.error('Checkout error:', error);
+      alert('Checkout could not be initialized. Please check your internet connection or try again later.');
+      setIsSubmitting(false);
+    }
+  };
 
   const isStep5Valid = useMemo(() => {
     if (IS_TEST_MODE) return true;
@@ -924,17 +973,17 @@ const App: React.FC = () => {
             <div className="flex gap-3 mt-4">
               <button 
                 onClick={prevStep} 
-                disabled={formData.billingTermsAccepted}
-                className={`flex-1 font-bold py-4 rounded-xl transition-all ${formData.billingTermsAccepted ? 'bg-gray-800/50 text-gray-700 cursor-not-allowed' : 'bg-gray-800 text-white'}`}
+                disabled={isSubmitting}
+                className={`flex-1 font-bold py-4 rounded-xl transition-all ${isSubmitting ? 'bg-gray-800/50 text-gray-700 cursor-not-allowed' : 'bg-gray-800 text-white'}`}
               >
                 Back
               </button>
               <button 
-                onClick={nextStep} 
-                disabled={!formData.billingTermsAccepted || !formData.schedulingNoticeAccepted || !formData.startDate || (isWithin24Hours && !formData.doubleChargeAccepted)}
-                className={`flex-[2] font-black py-4 rounded-xl uppercase tracking-widest transition-all ${(!formData.billingTermsAccepted || !formData.schedulingNoticeAccepted || !formData.startDate || (isWithin24Hours && !formData.doubleChargeAccepted)) ? 'bg-gray-800 text-gray-600 cursor-not-allowed' : 'bg-yellow-500 text-black'}`}
+                onClick={handleCheckout} 
+                disabled={isSubmitting || !formData.billingTermsAccepted || !formData.schedulingNoticeAccepted || !formData.startDate || (isWithin24Hours && !formData.doubleChargeAccepted)}
+                className={`flex-[2] font-black py-4 rounded-xl uppercase tracking-widest transition-all ${isSubmitting || (!formData.billingTermsAccepted || !formData.schedulingNoticeAccepted || !formData.startDate || (isWithin24Hours && !formData.doubleChargeAccepted)) ? 'bg-gray-800 text-gray-600 cursor-not-allowed' : 'bg-yellow-500 text-black'}`}
               >
-                Submit Request
+                {isSubmitting ? <><i className="fa-solid fa-spinner fa-spin mr-2"></i> Initializing...</> : 'Submit Request'}
               </button>
             </div>
           </StepWrapper>
@@ -949,33 +998,25 @@ const App: React.FC = () => {
               </div>
               
               <div className="space-y-3">
-                <p className="text-white font-black text-xl uppercase tracking-tight">Submission Successful</p>
+                <p className="text-white font-black text-xl uppercase tracking-tight">Payment & Request Successful</p>
                 <p className="text-[11px] text-gray-400 font-bold uppercase tracking-widest leading-relaxed">
-                  Thank you for choosing Maxflow Traffic Control And Thermoplastic LLC. 
-                  Our dispatch and engineering team will review your project scope and contact you shortly.
+                  Your deposit has been processed securely. Our engineering and dispatch team at Maxflow Traffic Control LLC has received your request and will reach out shortly for final coordination.
                 </p>
               </div>
 
               <div className="w-full bg-[#121418] border border-gray-800 p-5 rounded-2xl space-y-4">
-                <p className="text-[10px] text-yellow-500 font-black uppercase tracking-widest">Next Steps:</p>
+                <p className="text-[10px] text-yellow-500 font-black uppercase tracking-widest">Important Reassurance:</p>
                 <div className="text-left space-y-3">
-                  <div className="flex gap-3 items-start">
-                    <span className="text-yellow-500 font-black">1.</span>
-                    <p className="text-[10px] text-gray-300 font-bold uppercase leading-relaxed">Our admin team (longdang@maxflowtc.com) will confirm crew availability for {formData.startDate}.</p>
-                  </div>
-                  <div className="flex gap-3 items-start">
-                    <span className="text-yellow-500 font-black">2.</span>
-                    <p className="text-[10px] text-gray-300 font-bold uppercase leading-relaxed">A final invoice for the initial deposit will be sent to {formData.email}.</p>
-                  </div>
-                  <div className="flex gap-3 items-start">
-                    <span className="text-yellow-500 font-black">3.</span>
-                    <p className="text-[10px] text-gray-300 font-bold uppercase leading-relaxed">Upon deposit receipt, your job will be officially scheduled and dispatched.</p>
-                  </div>
+                  <p className="text-[10px] text-gray-300 font-bold uppercase leading-relaxed">• Your project is now prioritized in our daily scheduling queue.</p>
+                  <p className="text-[10px] text-gray-300 font-bold uppercase leading-relaxed">• An official confirmation email containing your receipt and project details has been sent to {formData.email}.</p>
+                  <p className="text-[10px] text-gray-300 font-bold uppercase leading-relaxed">• For immediate assistance or changes, please reference your order number in the email when calling support.</p>
                 </div>
               </div>
 
               <button 
-                onClick={() => setStep(Step.CustomerInfo)} 
+                onClick={() => {
+                  window.location.href = window.location.origin + window.location.pathname;
+                }} 
                 className="w-full bg-gray-800 text-white font-black py-4 rounded-xl uppercase tracking-widest border border-gray-700 hover:bg-gray-700 transition-all"
               >
                 Start a New Request
