@@ -1,0 +1,17 @@
+{
+  "name": "Copy of Maxflow Traffic Control & Thermoplastic LLC",
+  "short_name": "Maxflow Traffic",
+  "description": "Request lane closures, flagging, MUTCD sign packages, and roadway compliance services from Maxflow Traffic Control & Thermoplastic LLC. Secure scheduling and deposit payment included.",
+  "requestFramePermissions": [
+    "geolocation"
+  ],
+  "categories": [
+    "business",
+    "utilities",
+    "construction",
+    "productivity"
+  ],
+  "orientation": "portrait",
+  "theme_color": "#eab308",
+  "background_color": "#0f1115"
+}
