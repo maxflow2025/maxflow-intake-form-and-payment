@@ -979,17 +979,41 @@ const App: React.FC = () => {
                 Back
               </button>
               <button 
-                onClick={handleCheckout} 
-                disabled={isSubmitting || !formData.billingTermsAccepted || !formData.schedulingNoticeAccepted || !formData.startDate || (isWithin24Hours && !formData.doubleChargeAccepted)}
-                className={`flex-[2] font-black py-4 rounded-xl uppercase tracking-widest transition-all ${isSubmitting || (!formData.billingTermsAccepted || !formData.schedulingNoticeAccepted || !formData.startDate || (isWithin24Hours && !formData.doubleChargeAccepted)) ? 'bg-gray-800 text-gray-600 cursor-not-allowed' : 'bg-yellow-500 text-black'}`}
-              >
-                {isSubmitting ? <><i className="fa-solid fa-spinner fa-spin mr-2"></i> Initializing...</> : 'Submit Request'}
-              </button>
-            </div>
-          </StepWrapper>
-        );
+               const handleCheckout = async () => {
+  try {
+    setIsSubmitting(true);
 
-      case Step.ThankYou:
+    const response = await fetch("/api/create-checkout", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        source: "maxflow-intake-form",
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to create checkout session");
+    }
+
+    const result = await response.json();
+
+    if (!result.url) {
+      throw new Error("Stripe checkout URL missing");
+    }
+
+    // 🔴 THIS IS THE KEY LINE THAT WAS MISSING BEFORE
+    window.location.href = result.url;
+
+  } catch (error) {
+    console.error("Stripe checkout error:", error);
+    alert("Checkout could not be initialized. Please try again.");
+  } finally {
+    setIsSubmitting(false);
+  }
+};
+
         return (
           <StepWrapper title="Request Received" currentStep={step} totalSteps={DISPLAY_TOTAL_STEPS} isTestMode={IS_TEST_MODE}>
             <div className="flex flex-col items-center justify-center py-8 text-center gap-6">
